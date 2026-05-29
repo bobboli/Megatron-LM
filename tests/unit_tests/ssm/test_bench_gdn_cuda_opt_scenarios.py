@@ -1,6 +1,7 @@
 import ast
 from pathlib import Path
 
+
 BENCH = Path(__file__).with_name("bench_gdn_cuda_opt.py")
 
 
@@ -21,10 +22,11 @@ def test_optimized_scenarios_route_through_mcore_wrapper():
         "dv_dhu",
         "dhu",
         "dqkwg",
+        "fused",
         "separate",
         "dv_dhu_dqkwg",
         "all_four",
-        "fwd_h_wy_dv_dhu_dqkwg",
+        "all_four_dv_dhu",
     ]
 
     for key in optimized:
@@ -39,18 +41,3 @@ def test_benchmark_does_not_require_patched_fla_sources():
 
     assert "patched flash-linear-attention" not in text
     assert "FLA_DISPATCH_SOURCE" not in text
-
-
-def test_benchmark_does_not_expose_dhu_dqkwg_wrapper_path():
-    scenarios = _literal_assignment("SCENARIOS")
-    flags = _literal_assignment("FLAGS")
-    forbidden = {
-        "MCORE_GDN_OPT_ENABLE_DHU_DQKWG",
-        "FLA_CUTE_BWD_DHU_DQKWG",
-        "FLA_CUTE_BWD_DHU_DQKWG_KERNEL",
-        "FLA_CUTE_BWD_DHU_DQKWG_DIRECT",
-    }
-
-    assert forbidden.isdisjoint(flags)
-    for key, (_label, env) in scenarios.items():
-        assert forbidden.isdisjoint(env), key

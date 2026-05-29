@@ -25,6 +25,7 @@ from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
 from megatron.core.transformer import TransformerConfig
 from tests.unit_tests.test_utilities import Utils
 
+
 FLAGS = (
     "MCORE_GDN_USE_OPT_WRAPPER",
     "MCORE_GDN_OPT_BACKEND",
@@ -34,12 +35,16 @@ FLAGS = (
     "MCORE_GDN_OPT_ENABLE_DV_DHU",
     "MCORE_GDN_OPT_ENABLE_DHU",
     "MCORE_GDN_OPT_ENABLE_DQKWG",
+    "MCORE_GDN_OPT_ENABLE_DHU_DQKWG",
     "FLA_CUTE_FWD_H",
     "CHUNK_DELTA_FWD_USE_BWD_PORT",
     "FLA_CUTE_WY_BWD",
     "FLA_CUTE_BWD_DV_DHU",
     "FLA_CUTE_BWD_DHU",
     "FLA_CUTE_BWD_DQKWG",
+    "FLA_CUTE_BWD_DHU_DQKWG",
+    "FLA_CUTE_BWD_DHU_DQKWG_KERNEL",
+    "FLA_CUTE_BWD_DHU_DQKWG_DIRECT",
 )
 
 
@@ -66,6 +71,7 @@ SCENARIOS = {
             "MCORE_GDN_OPT_ENABLE_DV_DHU": "0",
             "MCORE_GDN_OPT_ENABLE_DHU": "0",
             "MCORE_GDN_OPT_ENABLE_DQKWG": "0",
+            "MCORE_GDN_OPT_ENABLE_DHU_DQKWG": "0",
         },
     ),
     "dv_dhu": (
@@ -77,6 +83,7 @@ SCENARIOS = {
             "MCORE_GDN_OPT_ENABLE_WY_BWD": "0",
             "MCORE_GDN_OPT_ENABLE_DHU": "0",
             "MCORE_GDN_OPT_ENABLE_DQKWG": "0",
+            "MCORE_GDN_OPT_ENABLE_DHU_DQKWG": "0",
         },
     ),
     "dhu": (
@@ -88,6 +95,7 @@ SCENARIOS = {
             "MCORE_GDN_OPT_ENABLE_WY_BWD": "0",
             "MCORE_GDN_OPT_ENABLE_DV_DHU": "0",
             "MCORE_GDN_OPT_ENABLE_DQKWG": "0",
+            "MCORE_GDN_OPT_ENABLE_DHU_DQKWG": "0",
         },
     ),
     "dqkwg": (
@@ -99,6 +107,18 @@ SCENARIOS = {
             "MCORE_GDN_OPT_ENABLE_WY_BWD": "0",
             "MCORE_GDN_OPT_ENABLE_DV_DHU": "0",
             "MCORE_GDN_OPT_ENABLE_DHU": "0",
+            "MCORE_GDN_OPT_ENABLE_DHU_DQKWG": "0",
+        },
+    ),
+    "fused": (
+        "CUDA wy+dhu+dqkwg fused",
+        {
+            "MCORE_GDN_USE_OPT_WRAPPER": "1",
+            "MCORE_GDN_OPT_BACKEND": "cuda",
+            "MCORE_GDN_OPT_ENABLE_FWD_H": "0",
+            "MCORE_GDN_OPT_ENABLE_DV_DHU": "0",
+            "MCORE_GDN_OPT_ENABLE_DHU": "0",
+            "MCORE_GDN_OPT_ENABLE_DQKWG": "0",
         },
     ),
     "separate": (
@@ -108,32 +128,36 @@ SCENARIOS = {
             "MCORE_GDN_OPT_BACKEND": "cuda",
             "MCORE_GDN_OPT_ENABLE_FWD_H": "0",
             "MCORE_GDN_OPT_ENABLE_DV_DHU": "0",
+            "MCORE_GDN_OPT_ENABLE_DHU_DQKWG": "0",
         },
     ),
     "dv_dhu_dqkwg": (
-        "CUDA fused_dv_dhu+dqkwg",
+        "CUDA dv_local+delta_h fused + dqkwg",
         {
             "MCORE_GDN_USE_OPT_WRAPPER": "1",
             "MCORE_GDN_OPT_BACKEND": "cuda",
             "MCORE_GDN_OPT_ENABLE_FWD_H": "0",
             "MCORE_GDN_OPT_ENABLE_WY_BWD": "0",
             "MCORE_GDN_OPT_ENABLE_DHU": "0",
+            "MCORE_GDN_OPT_ENABLE_DHU_DQKWG": "0",
         },
     ),
     "all_four": (
-        "CUDA fwd_h+wy_bwd+dhu+dqkwg",
+        "CUDA all four",
         {
             "MCORE_GDN_USE_OPT_WRAPPER": "1",
             "MCORE_GDN_OPT_BACKEND": "cuda",
             "MCORE_GDN_OPT_ENABLE_DV_DHU": "0",
+            "MCORE_GDN_OPT_ENABLE_DHU_DQKWG": "0",
         },
     ),
-    "fwd_h_wy_dv_dhu_dqkwg": (
-        "CUDA fwd_h+wy_bwd+fused_dv_dhu+dqkwg",
+    "all_four_dv_dhu": (
+        "CUDA fwd_h+wy+dv_dhu+dqkwg",
         {
             "MCORE_GDN_USE_OPT_WRAPPER": "1",
             "MCORE_GDN_OPT_BACKEND": "cuda",
             "MCORE_GDN_OPT_ENABLE_DHU": "0",
+            "MCORE_GDN_OPT_ENABLE_DHU_DQKWG": "0",
         },
     ),
 }
@@ -187,9 +211,7 @@ def validate_dispatch_sources(scenario_items):
             spec = importlib.util.find_spec(module_name)
             if spec is None or spec.origin is None:
                 raise RuntimeError(f"cannot locate required mcore_gdn_opt module {module_name!r}")
-            print(
-                f"MCORE_GDN_OPT_DISPATCH_SOURCE module={module_name} path={spec.origin}", flush=True
-            )
+            print(f"MCORE_GDN_OPT_DISPATCH_SOURCE module={module_name} path={spec.origin}", flush=True)
 
 
 def nvtx_range(label, enabled=True):
@@ -234,21 +256,17 @@ def make_model(dtype):
         transformer_impl="transformer_engine",
     )
     submodules = get_experimental_attention_variant_module_spec(config=cfg).submodules
-    return (
-        GatedDeltaNet(
-            cfg,
-            submodules=submodules,
-            layer_number=1,
-            bias=False,
-            conv_bias=False,
-            conv_init=1.0,
-            use_qk_l2norm=True,
-            A_init_range=(1, 16),
-            pg_collection=pg_collection,
-        )
-        .cuda()
-        .to(dtype)
-    )
+    return GatedDeltaNet(
+        cfg,
+        submodules=submodules,
+        layer_number=1,
+        bias=False,
+        conv_bias=False,
+        conv_init=1.0,
+        use_qk_l2norm=True,
+        A_init_range=(1, 16),
+        pg_collection=pg_collection,
+    ).cuda().to(dtype)
 
 
 def zero_grads(model):
@@ -353,19 +371,10 @@ def benchmark(model, x, scenario_items, loss, warmup, repeats, rounds, use_nvtx=
         for round_idx in range(rounds):
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
-            with nvtx_range(
-                f"{base_label}/round_{round_idx:02d}/measured_{repeats}iters", enabled=use_nvtx
-            ):
+            with nvtx_range(f"{base_label}/round_{round_idx:02d}/measured_{repeats}iters", enabled=use_nvtx):
                 start.record()
                 for iter_idx in range(repeats):
-                    fwd_bwd(
-                        model,
-                        x,
-                        env,
-                        loss,
-                        f"{base_label}/round_{round_idx:02d}/iter_{iter_idx:02d}",
-                        use_nvtx,
-                    )
+                    fwd_bwd(model, x, env, loss, f"{base_label}/round_{round_idx:02d}/iter_{iter_idx:02d}", use_nvtx)
                 end.record()
             torch.cuda.synchronize()
             samples.append(start.elapsed_time(end) * 1000.0 / repeats)
@@ -389,7 +398,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dtype", choices=("bf16", "fp16"), default="bf16")
     parser.add_argument("--loss", choices=("sum", "square_mean"), default="square_mean")
-    parser.add_argument("--scenarios", default="baseline,separate,all_four,fwd_h_wy_dv_dhu_dqkwg")
+    parser.add_argument("--scenarios", default="baseline,fused,separate,all_four")
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--repeats", type=int, default=20)
     parser.add_argument("--rounds", type=int, default=3)
@@ -421,9 +430,7 @@ def main():
     try:
         model = make_model(dtype).eval()
         x = torch.randn(8192, 2, 128, device="cuda", dtype=dtype)
-        accuracy_rows = check_accuracy(
-            model, x, scenario_items, args.loss, args.atol, args.rtol, args.use_nvtx
-        )
+        accuracy_rows = check_accuracy(model, x, scenario_items, args.loss, args.atol, args.rtol, args.use_nvtx)
         for row in accuracy_rows:
             print(
                 f"ACCURACY name={row.name!r} status={row.status} "
@@ -432,16 +439,7 @@ def main():
                 f"worst_param={row.worst_param} "
                 f"worst_param_max_abs={row.worst_param_max_abs:.9f}"
             )
-        perf_rows = benchmark(
-            model,
-            x,
-            scenario_items,
-            args.loss,
-            args.warmup,
-            args.repeats,
-            args.rounds,
-            args.use_nvtx,
-        )
+        perf_rows = benchmark(model, x, scenario_items, args.loss, args.warmup, args.repeats, args.rounds, args.use_nvtx)
         for row in perf_rows:
             print(
                 f"PERF name={row.name!r} mean_us={row.mean_us:.3f} "
