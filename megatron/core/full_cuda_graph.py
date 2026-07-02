@@ -326,6 +326,15 @@ class FullCudaGraphWrapper:
                 f"FSDP param gather sync done ({synchronized} modules)"
             )
             logger.info(f'Capture CUDA graph for {training_str}!!!')
+            if hasattr(torch.autograd.graph, 'set_override_stale_capture_stream'):
+                torch.autograd.graph.set_override_stale_capture_stream(True)
+            else:
+                logger.warning(
+                    'torch.autograd.graph.set_override_stale_capture_stream is not '
+                    'available in this PyTorch version; CUDA graph capture may fail '
+                    'if autograd nodes hold stale references to non-capturing streams. '
+                    'Upgrade to a PyTorch build that includes pytorch/pytorch#180090.'
+                )
             _print_rank0(f"{training_str} iteration {curr_iteration}: pre-capture barrier start")
             torch.distributed.barrier()
             _print_rank0(f"{training_str} iteration {curr_iteration}: pre-capture barrier done")
