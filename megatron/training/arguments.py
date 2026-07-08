@@ -1279,7 +1279,9 @@ def validate_args(args, defaults={}):
             # So we enable the manual registration by default when nccl-ub and use_megatron_fsdp is set.
             args.fsdp_manual_registration = True
             args.fsdp_double_buffer = True
-            warn_rank_0('FSDP double buffer and manual registration is enabled by default when --nccl-ub is enabled!')
+            warn_rank_0(
+                'FSDP double buffer and manual registration is enabled by default when --nccl-ub is enabled!'
+            )
 
         if args.megatron_fsdp_max_pool_double_buffer:
             # MaxPoolAllocator is a type of FSDP double buffer.
@@ -2176,9 +2178,7 @@ def core_transformer_config_from_args(args, config_class=None):
         from megatron.core.models.hybrid.hybrid_layer_allocation import Symbols
 
         _pat = args.hybrid_layer_pattern
-        _has_dsv4_csa = (
-            (Symbols.CSA in _pat) or (Symbols.HCA in _pat) or (Symbols.WINDOW in _pat)
-        )
+        _has_dsv4_csa = (Symbols.CSA in _pat) or (Symbols.HCA in _pat) or (Symbols.WINDOW in _pat)
         _has_dsa = Symbols.DS_ATTENTION in _pat
         if getattr(args, 'experimental_attention_variant', None) is None:
             # 'C'/'H'/'W' run the DSv4 CompressedSparseAttention (CSA/HCA/window-only), which
@@ -2194,8 +2194,9 @@ def core_transformer_config_from_args(args, config_class=None):
         # provide --csa-compress-ratios, derive it from the pattern symbols (C->4, H->128,
         # W/D/others->0; MTP slots 0) so the length-checked dsv4_hybrid validation passes and the
         # per-layer ratios match the symbols. C/H/W layers also take their ratio via the spec.
-        _variant = kw_args.get('experimental_attention_variant',
-                               getattr(args, 'experimental_attention_variant', None))
+        _variant = kw_args.get(
+            'experimental_attention_variant', getattr(args, 'experimental_attention_variant', None)
+        )
         if _variant == 'dsv4_hybrid' and getattr(args, 'csa_compress_ratios', None) is None:
             _ratio_map = {Symbols.CSA: 4, Symbols.HCA: 128}
             # One ratio entry per ACTUAL layer: main layers, then every MTP layer of every MTP
@@ -4041,6 +4042,12 @@ def _add_distributed_args(parser):
         'This option is only effective when use-megatron-fsdp and use-nccl-ub is set.',
     )
     group.add_argument(
+        '--megatron-fsdp-max-pool-double-buffer',
+        action='store_true',
+        help='Use MaxPoolAllocator for Megatron-FSDP persistent buffers so asymmetric '
+        'FSDP units can use NCCL user-buffer registration or CUDA graph replay.',
+    )
+    group.add_argument(
         '--fsdp-db-use-persist-buf-on-alloc-fail',
         action='store_true',
         dest='fsdp_db_use_persist_buf_on_alloc_fail',
@@ -4978,16 +4985,6 @@ def _add_experimental_args(parser):
             'recomputation will be unsharded.'
         ),
     )
-
-    group.add_argument("--megatron-fsdp-max-pool-double-buffer", action='store_true',
-                        help="When using Megatron-FSDP double buffering, use the MaxPoolAllocator instead of "
-                             "the FixedPoolAllocator to support asymmetrical FSDP unit configurations. Will "
-                             "increase memory overhead to recycle buffers that fit all FSDP units. Enables "
-                             "NCCL user buffer registration and CUDA graph replay for mixed-arch models.")
-    group.add_argument("--fsdp-db-use-persist-buf-on-alloc-fail", action='store_true',
-                        help="When using Megatron-FSDP double buffering, persist non-unit modules that "
-                             "are not included in the symmetric buffer pool. May be necessary for NCCL "
-                             "UBR or CUDA Graphs on hybrid architectures.")
 
     return parser
 
