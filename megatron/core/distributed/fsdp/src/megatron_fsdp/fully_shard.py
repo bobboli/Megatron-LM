@@ -106,6 +106,7 @@ def fully_shard_model(
     use_decoupled_grad: bool = False,
     cuda_graph_mode: bool = False,
     maxpool_double_buffer: bool = False,
+    maxpool_buffer_count: int = 2,
 ) -> torch.nn.Module:
     """
     Fully-shard the model for Megatron-FSDP. This wraps the model in a MegatronFSDP
@@ -285,6 +286,10 @@ def fully_shard_model(
             user buffer registration and CUDA graph replay for models with asymmetrical
             FSDP units, such as models with hybrid architectures (e.g. Mamba and MoE).
 
+        maxpool_buffer_count (int):
+            Number of persistent buffer groups managed by MaxPoolAllocator. Defaults to 2.
+            Increase it only when the execution schedule keeps more than two FSDP units live.
+
     Returns:
         model (MegatronFSDP): The wrapped Megatron-FSDP model configured for FSDP.
     """
@@ -382,6 +387,7 @@ def fully_shard_model(
         megatron_fsdp_use_decoupled_grad=use_decoupled_grad,
         megatron_fsdp_cuda_graph_mode=cuda_graph_mode,
         megatron_fsdp_max_pool_double_buffer=maxpool_double_buffer,
+        megatron_fsdp_max_pool_buffer_count=maxpool_buffer_count,
     )
 
     # Create FSDPDistributedIndex.
@@ -690,6 +696,7 @@ def fully_shard(
     use_decoupled_grad: bool = False,
     cuda_graph_mode: bool = False,
     maxpool_double_buffer: bool = False,
+    maxpool_buffer_count: int = 2,
 ) -> tuple[MegatronFSDP, torch.optim.Optimizer]:
     """
     Fully shard the model and the optimizer for Megatron-FSDP.
@@ -742,6 +749,7 @@ def fully_shard(
         use_decoupled_grad=use_decoupled_grad,
         cuda_graph_mode=cuda_graph_mode,
         maxpool_double_buffer=maxpool_double_buffer,
+        maxpool_buffer_count=maxpool_buffer_count,
     )
 
     # Extend optimizer methods to support Megatron-FSDP operations.
