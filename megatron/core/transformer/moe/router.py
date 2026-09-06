@@ -282,7 +282,11 @@ class TopKRouter(Router):
 
         # replay only records main-decoder MoE layers; an MTP router would pop from an empty stream
         if not self.is_mtp_layer:
-            routing_replay_manager.register_to_module(self, "routing_replay")
+            routing_replay_manager.register_to_module(
+                self,
+                "routing_replay",
+                stream_idx=self.layer_number - 1 if self.layer_number is not None else None,
+            )
 
     def _maintain_float32_expert_bias(self):
         """

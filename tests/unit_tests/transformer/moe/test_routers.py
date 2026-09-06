@@ -739,6 +739,27 @@ class TestHashRouting:
 
     @pytest.mark.internal
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_routing_replay_uses_global_layer_index(self, monkeypatch):
+        """The rollout replay stream follows the router's global, zero-based layer index."""
+        from miles.utils.replay_base import routing_replay_manager
+
+        registered = []
+
+        def register_to_module(module, attr_name, stream_idx=None):
+            registered.append((module, attr_name, stream_idx))
+
+        monkeypatch.setattr(routing_replay_manager, "register_to_module", register_to_module)
+        pg_collection = get_default_pg_collection()
+        router = TopKRouter(
+            config=_hash_routing_config(),
+            pg_collection=pg_collection,
+            layer_number=2,
+        )
+
+        assert registered == [(router, "routing_replay", 1)]
+
+    @pytest.mark.internal
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_moe_layer_hash_routing_integration(self):
         """End-to-end MoELayer forward/backward with hash routing; raises without input_ids."""
         config = _hash_routing_config(moe_n_hash_layers=1)
